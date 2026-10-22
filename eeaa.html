@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班級午餐訂餐系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+        }
+        .form-group {
+            background: #eef2f3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .form-inline {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        input, select, button {
+            padding: 8px 12px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background-color: #219653;
+        }
+        .btn-danger {
+            background-color: #e74c3c;
+        }
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        .alert {
+            color: #e74c3c;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 10px;
+            min-height: 24px;
+        }
+        .summary-box {
+            display: flex;
+            justify-content: space-around;
+            background: #34495e;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .accent {
+            color: #f1c40f;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>校園午餐訂餐系統 🍱</h1>
+
+    <!-- 1. 菜單管理 -->
+    <h2>當日菜單</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>編號</th>
+                <th>品名</th>
+                <th>價格</th>
+            </tr>
+        </thead>
+        <tbody id="menu-table">
+            <!-- 由 JS 自動生成 -->
+        </tbody>
+    </table>
+
+    <!-- 2. 訂餐登記 -->
+    <div class="form-group">
+        <h2>點餐輸入</h2>
+        <div class="form-inline">
+            <label for="seat-num">座號 (1-50):</label>
+            <input type="number" id="seat-num" min="0" max="50" placeholder="輸入 0 結算">
+            
+            <label for="item-id">餐點編號:</label>
+            <select id="item-id">
+                <!-- 由 JS 自動生成 -->
+            </select>
+            
+            <button onclick="addOrder()">加入訂單</button>
+            <button class="btn-danger" onclick="checkout()">輸入0 結束並結算</button>
+        </div>
+        <div id="error-msg" class="alert"></div>
+    </div>
+
+    <!-- 4. 結算報表 -->
+    <h2>結算報表</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>品項</th>
+                <th>單價</th>
+                <th>訂購數量</th>
+                <th>小計</th>
+            </tr>
+        </thead>
+        <tbody id="report-table">
+            <!-- 結算結果 -->
+        </tbody>
+    </table>
+
+    <div class="summary-box">
+        <div>總訂餐筆數: <span id="total-count" class="accent">0</span> 筆</div>
+        <div>全班總金額: <span id="total-amount" class="accent">0</span> 元</div>
+    </div>
+</div>
+
+<script>
+    // 內建 5 項菜單資料
+    const menu = {
+        1: { name: "排骨便當", price: 80 },
+        2: { name: "雞腿便便", price: 85 },
+        3: { name: "素食便當", price: 70 },
+        4: { name: "滷肉飯", price: 55 },
+        5: { name: "貢丸湯", price: 20 }
+    };
+
+    // 儲存所有訂單的陣列
+    let orders = [];
+    // 用來記錄計時器，避免快速點擊時提示訊息閃爍
+    let msgTimeout;
+
+    // 初始化網頁：顯示菜單與下拉選單
+    function initSystem() {
+        const menuTable = document.getElementById('menu-table');
+        const itemIdSelect = document.getElementById('item-id');
+        
+        menuTable.innerHTML = '';
+        itemIdSelect.innerHTML = '';
+
+        for (const [id, item] of Object.entries(menu)) {
+            // 填入菜單表格
+            menuTable.innerHTML += `
+                <tr>
+                    <td>${id}</td>
+                    <td>${item.name}</td>
+                    <td>${item.price} 元</td>
+                </tr>
+            `;
+            // 填入下拉選單
+            itemIdSelect.innerHTML += `<option value="${id}">${id}. ${item.name} ($${item.price})</option>`;
+        }
+    }
+
+    // 處理訂單輸入與驗證
+    function addOrder() {
+        const seatInput = document.getElementById('seat-num');
+        const itemSelect = document.getElementById('item-id');
+        const errorMsg = document.getElementById('error-msg');
+        
+        const seat = parseInt(seatInput.value);
+        const itemId = parseInt(itemSelect.value);
+
+        errorMsg.innerText = ''; // 清空錯誤訊息
+        clearTimeout(msgTimeout); // 清除上一次的計時器
+
+        // 驗證是否輸入內容
+        if (isNaN(seat)) {
+            errorMsg.style.color = "#e74c3c";
+            errorMsg.innerText = "❌ 請輸入座號！";
+            return;
+        }
+
+        // 座號 0 結束輸入
+        if (seat === 0) {
+            seatInput.value = '';
+            checkout();
+            return;
+        }
+
+        // 3. 輸入驗證 (座號 1~50)
+        if (seat < 1 || seat > 50) {
+            errorMsg.style.color = "#e74c3c";
+            errorMsg.innerText = "❌ 錯誤：座號必須在 1 到 50 之間！";
+            seatInput.value = '';
+            seatInput.focus();
+            return;
+        }
+
+        if (!menu[itemId]) {
+            errorMsg.style.color = "#e74c3c";
+            errorMsg.innerText = "❌ 錯誤：不合法的餐點編號！";
+            return;
+        }
+
+        // 通過驗證，寫入紀錄
+        orders.push({ seat: seat, itemId: itemId });
+
+        // 提示成功並重設輸入框
+        errorMsg.style.color = "#27ae60";
+        errorMsg.innerText = `✔️ 已登記：${seat}號 點購 ${menu[itemId].name}`;
+        
+        // 2 秒後自動清除成功提示
+        msgTimeout = setTimeout(() => {
+            if(errorMsg.innerText.includes("已登記")) {
+                errorMsg.innerText = "";
+            }
+        }, 2000);
+
+        seatInput.value = '';
+        seatInput.focus();
+    }
+
+    // 4. 結算報表
+    function checkout() {
+        const reportTable = document.getElementById('report-table');
+        const totalCountSpan = document.getElementById('total-count');
+        const totalAmountSpan = document.getElementById('total-amount');
+        const errorMsg = document.getElementById('error-msg');
+
+        // 初始化統計資料
+        let stats = {};
+        for (const id in menu) {
+            stats[id] = { count: 0 };
+        }
+
+        let totalAmount = 0;
+        let totalCount = orders.length;
+
+        // 計算各品項數量
+        orders.forEach(order => {
+            if (stats[order.itemId]) {
+                stats[order.itemId].count++;
+            }
+        });
+
+        // 生成報表 HTML
+        reportTable.innerHTML = '';
+        for (const id in menu) {
+            const price = menu[id].price;
+            const count = stats[id].count;
+            const subtotal = price * count;
+            totalAmount += subtotal;
+
+            reportTable.innerHTML += `
+                <tr>
+                    <td>${menu[id].name}</td>
+                    <td>${price} 元</td>
+                    <td>${count}</td>
+                    <td>${subtotal} 元</td>
+                </tr>
+            `;
+        }
+
+        // 更新總計區塊
+        totalCountSpan.innerText = totalCount;
+        totalAmountSpan.innerText = totalAmount;
+
+        // 更新提示狀態
+        clearTimeout(msgTimeout);
+        errorMsg.style.color = "#2c3e50";
+        errorMsg.innerText = "📊 統計報表已更新！";
+    }
+
+    // 當網頁載入時啟動
+    window.onload = initSystem;
+</script>
+</body>
+</html>
